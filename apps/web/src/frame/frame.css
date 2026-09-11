@@ -1,0 +1,251 @@
+/* /frame 相框端样式（PRD §5 / §12 老人交互规范）
+   按实际 viewport 排版，不锁定屏幕比例；浏览器地址栏由宿主控制。
+   按钮：高度 ≥120px，热区 ≥140×120，大图标，文字仅为辅助。 */
+
+.frame-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #111a19;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.frame-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 照片区：整块都是播放点击区；object-fit: contain 禁止裁切人物（PRD §5.2） */
+.frame-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: #111a19;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.frame-stage img {
+  position: absolute;
+  inset: 8px;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.frame-photo-previous { opacity: 1; }
+
+.frame-photo-incoming {
+  animation: frame-photo-dissolve 400ms ease-out both;
+}
+
+@keyframes frame-photo-dissolve {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.frame-root * { box-sizing: border-box; }
+
+/* 留言始终可读，与 TTS 支持与否、播放状态无关；80 字全文换行，不截断。 */
+.frame-message {
+  flex: 0 0 auto;
+  padding: 8px clamp(16px, 3vw, 60px);
+  color: #fff;
+  background: #182521;
+  font-size: clamp(28px, 3vw, 56px);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.frame-message-author {
+  color: #b9c9c1;
+  font-size: 0.65em;
+}
+
+.frame-message p { margin: 4px 0 0; }
+
+.frame-stage:focus-visible, .frame-btn:focus-visible {
+  outline: 4px solid #facc15;
+  outline-offset: -4px;
+}
+
+.frame-photo-loading {
+  width: 100%;
+  height: 100%;
+}
+
+.frame-photo-error {
+  color: #6b7280;
+  font-size: 40px;
+  text-align: center;
+}
+
+/* 新照片标记：大而简单的圆点 + 呼吸；遵守 prefers-reduced-motion（PRD §6） */
+.frame-badge {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.25);
+  animation: frame-breathe 2s ease-in-out infinite;
+}
+
+@keyframes frame-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame-badge {
+    animation: none;
+  }
+
+  .frame-photo-incoming { animation: none; }
+}
+
+/* 底部三个大按钮（PRD §6 / §12） */
+.frame-bar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(8px, 1.25vw, 24px);
+  padding: clamp(8px, 1.5vh, 20px) clamp(8px, 2vw, 40px);
+}
+
+.frame-btn {
+  min-height: 120px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #24332d;
+  color: #ffffff;
+  border: 3px solid #3b4a44;
+  border-radius: 20px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.frame-btn:active {
+  background: #30433b;
+}
+
+.frame-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.frame-btn[aria-pressed='true'] {
+  border-color: #f3c968;
+}
+
+.frame-btn-play {
+  background: #f3c968;
+  border-color: #f3c968;
+  color: #253027;
+}
+
+.frame-btn-play .frame-label { color: #253027; }
+
+.frame-icon {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.frame-label {
+  font-size: 26px;
+  color: #d1d5db;
+}
+
+/* 管理员角落小状态点（PRD §19）：不遮挡照片，不出现文字报错 */
+.frame-conn {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f59e0b; /* connecting / reconnecting */
+}
+
+.frame-conn[data-conn='ok'] {
+  background: #22c55e;
+}
+
+/* 空相册 */
+.frame-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 40px;
+  text-align: center;
+  padding: 0 60px;
+}
+
+/* 设备令牌配置（仅管理员一次性使用，非老人日常界面） */
+.frame-setup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  color: #ffffff;
+}
+
+.frame-setup h1 {
+  font-size: 32px;
+  margin: 0;
+}
+
+.frame-setup input {
+  width: min(640px, 80vw);
+  font-size: 24px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 2px solid #374151;
+  background: #111827;
+  color: #ffffff;
+}
+
+.frame-setup button {
+  font-size: 24px;
+  padding: 14px 44px;
+  border-radius: 12px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.frame-setup-error {
+  color: #f87171;
+  font-size: 20px;
+  margin: 0;
+}

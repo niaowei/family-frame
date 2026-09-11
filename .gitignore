@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+coverage/
+
+# env — 真实密钥禁止进入仓库（PRD §21）
+# 覆盖 .env / .env.local / .env.production / .env.sealos 等一切变体，仅放行 .env.example
+.env
+.env.*
+!.env.example
+
+# prisma
+# 注意：prisma/migrations 必须提交，这里只忽略生成物
+
+# logs
+*.log
+npm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Android local build output
+apps/android/.gradle/
+apps/android/**/build/

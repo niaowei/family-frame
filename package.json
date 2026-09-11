@@ -1,0 +1,53 @@
+{
+  "name": "family-frame",
+  "version": "0.1.0",
+  "private": true,
+  "description": "家里来照片了 — 家庭语音相框（家人发照片+留言，奶奶点照片听声音）",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "dependencies": {
+    "prisma": "^6.16.2"
+  },
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @family-frame/api\" \"npm run dev -w @family-frame/web\"",
+    "dev:api": "npm run dev -w @family-frame/api",
+    "dev:web": "npm run dev -w @family-frame/web",
+    "start:prod": "node apps/api/dist/index.js",
+    "build": "npm run build -w @family-frame/api && npm run build -w @family-frame/web",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:up": "docker compose up -d",
+    "db:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema=prisma/schema.prisma",
+    "db:generate": "prisma generate --schema=prisma/schema.prisma",
+    "db:studio": "prisma studio --schema=prisma/schema.prisma",
+    "db:seed": "prisma db seed",
+    "bootstrap:family": "node apps/api/scripts/bootstrap-family.mjs",
+    "s3:init": "node apps/api/scripts/create-bucket.mjs",
+    "postinstall": "prisma generate --schema=prisma/schema.prisma"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@types/supertest": "^6.0.3",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.35.0",
+    "fake-indexeddb": "^6.2.5",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.43.0",
+    "vitest": "^3.2.4"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

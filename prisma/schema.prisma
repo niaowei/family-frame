@@ -1,0 +1,183 @@
+// 数据模型（PRD §9），表名/列名映射为 snake_case（与《可行性与实施报告》§14 一致）。
+// relations 由实现补齐（PRD 已授权）。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberRole {
+  ADMIN
+  MEMBER
+}
+
+enum MediaType {
+  PHOTO
+  VOICE
+  VIDEO
+}
+
+model Family {
+  id        String   @id @default(cuid())
+  // 长期家庭入口标识：只定位家庭，不授予加入或媒体访问权限。
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  members   Member[]
+  devices   Device[]
+  posts     Post[]
+  pairCodes PairCode[]
+  invitations FamilyInvitation[]
+
+  @@map("families")
+}
+
+model Member {
+  id          String     @id @default(cuid())
+  familyId    String     @map("family_id")
+  displayName String     @map("display_name")
+  role        MemberRole @default(MEMBER)
+  pinHash     String     @map("pin_hash")
+  sessionVersion Int     @default(0) @map("session_version")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id])
+  posts  Post[]
+
+  @@index([familyId])
+  @@map("members")
+}
+
+model FamilyInvitation {
+  id        String    @id @default(cuid())
+  familyId  String    @map("family_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  @@index([familyId])
+  @@map("family_invitations")
+}
+
+// 相框持有随机设备凭证；手机只提交屏幕上的短码，不能获取设备凭证。
+model DevicePairRequest {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  claimedAt DateTime? @map("claimed_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  @@map("device_pair_requests")
+}
+
+model Device {
+  id         String    @id @default(cuid())
+  familyId   String    @map("family_id")
+  name       String
+  tokenHash  String    @unique @map("token_hash")
+  lastSeenAt DateTime? @map("last_seen_at")
+  appVersion String?   @map("app_version")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  family Family       @relation(fields: [familyId], references: [id])
+  reads  DeviceRead[]
+  deliveries FrameDelivery[]
+
+  @@index([familyId])
+  @@map("devices")
+}
+
+model Post {
+  id          String    @id @default(cuid())
+  familyId    String    @map("family_id")
+  memberId    String    @map("member_id")
+  messageText String?   @map("message_text") @db.VarChar(255)
+  photoCount  Int       @default(0) @map("photo_count")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  deletedAt   DateTime? @map("deleted_at")
+  cloudCleanedAt DateTime? @map("cloud_cleaned_at")
+
+  family Family       @relation(fields: [familyId], references: [id])
+  member Member       @relation(fields: [memberId], references: [id])
+  media  Media[]
+  reads  DeviceRead[]
+  deliveries FrameDelivery[]
+
+  // feed 按 family + 时间倒序查询（PRD §14 GET /api/frame/feed）
+  @@index([familyId, createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+model Media {
+  id         String    @id @default(cuid())
+  postId     String    @map("post_id")
+  type       MediaType
+  objectKey  String    @map("object_key")
+  mimeType   String    @map("mime_type")
+  width      Int?
+  height     Int?
+  durationMs Int?      @map("duration_ms")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("media")
+}
+
+model DeviceRead {
+  deviceId    String    @map("device_id")
+  postId      String    @map("post_id")
+  firstSeenAt DateTime? @map("first_seen_at")
+  heardAt     DateTime? @map("heard_at")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, postId])
+  @@map("device_reads")
+}
+
+// 短码配对（E2 §6）：家人登录后在网页生成 6 位数字短码；
+// 相框输入短码兑换一次性 device token。5 分钟有效，原子单次兑换，猜测限流。
+model PairCode {
+  id        String    @id @default(cuid())
+  familyId  String    @map("family_id")
+  code      String
+  createdBy String    @map("created_by")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([code])
+  @@map("pair_codes")
+}
+
+model FrameDelivery {
+  id            String    @id @default(cuid())
+  deviceId      String    @map("device_id")
+  postId        String    @map("post_id")
+  completeAt    DateTime? @map("complete_at")
+  lastAttemptAt DateTime? @map("last_attempt_at")
+  failureCount  Int       @default(0) @map("failure_count")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, postId])
+  @@index([postId, completeAt])
+  @@map("frame_deliveries")
+}
