@@ -59,11 +59,14 @@
 
 ```bash
 # 1. 安装依赖（postinstall 自动执行 prisma generate）
+#    若你的 npm 启用了脚本审批（allow-scripts），补一句：
+#      npx prisma generate --schema=prisma/schema.prisma
 npm install
 
 # 2. 准备环境变量
 cp .env.example .env
-# 本地默认连 docker compose 的 MySQL 与 MinIO，无需修改即可开发
+# .env.example 已内置与 docker compose 对应的本地默认值，无需修改即可开发；
+# 生产部署务必全部替换（详见文件内注释）
 
 # 3. 启动 MySQL 8 + MinIO
 docker compose up -d
