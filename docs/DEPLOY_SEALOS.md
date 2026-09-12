@@ -174,7 +174,7 @@ curl https://<你的域名>/health
 
 ## 9. 手机上传验证（家人端）
 
-见 [MOBILE_ACCEPTANCE.md](MOBILE_ACCEPTANCE.md) 清单，逐项打勾。
+用手机浏览器完成一次端到端验证：邀请码登录 → `/send` 上传一张照片和一段语音 → `/history` 确认可见 → 相框端同步收到并能播放。
 
 ## 10. 相框（Frame）配对
 
