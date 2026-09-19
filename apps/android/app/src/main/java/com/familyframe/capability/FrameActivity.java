@@ -34,9 +34,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.VideoView;
-import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.TransitionDrawable;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -80,6 +78,10 @@ public class FrameActivity extends Activity {
     private int index = -1;
     private int photoIndex = 0;
     private boolean videoActive = false;
+    private boolean videoPrepared = false;
+    private boolean playVideoWithSound = false;
+    private MediaPlayer videoPlayer;
+    private int videoGeneration = 0;
     private long lastActivityAt = 0;
     private boolean autoAdvance = false;
     private String shownPostId = null;
@@ -245,6 +247,9 @@ public class FrameActivity extends Activity {
     }
 
     private void showEmpty() {
+        stopPlayback();
+        photoView.animate().cancel();
+        photoView.setAlpha(1f);
         photoView.setImageDrawable(null);
         videoView.setVisibility(View.GONE);
         videoActive = false;
@@ -270,7 +275,7 @@ public class FrameActivity extends Activity {
         senderView.setText(post.memberName + " · " + friendlyDate(post.createdAt));
         messageView.setText(post.messageText == null ? "" : post.messageText);
 
-        if (samePost && keepCurrent) {
+        if (samePost && keepCurrent && (!videoActive || loading || videoPrepared)) {
             refreshCarouselTimer();
             return; // 不打断正在看的画面/正在播的媒体
         }
@@ -301,30 +306,47 @@ public class FrameActivity extends Activity {
             photoView.setImageDrawable(null);
             videoView.setVisibility(View.VISIBLE);
             videoActive = true;
-            videoView.setVideoURI(Uri.fromFile(display.file(store.root())));
+            final int generation = videoGeneration;
             videoView.setOnPreparedListener(mp -> {
-                mp.setVolume(0f, 0f); // 到达新视频不自动发声
+                if (!isCurrentVideo(generation, post)) return;
+                videoPlayer = mp;
+                videoPrepared = true;
+                mp.setVolume(playVideoWithSound ? 1f : 0f, playVideoWithSound ? 1f : 0f);
                 mp.setLooping(false);
                 mp.start();
                 loading = false;
-            });
-            videoView.setOnCompletionListener(mp -> {
-                // 播完定格在最后一帧，恢复轮播计时
-                loading = false;
                 refreshCarouselTimer();
             });
-            videoView.setOnErrorListener((mp, what, extra) -> {
+            videoView.setOnCompletionListener(mp -> {
+                if (!isCurrentVideo(generation, post)) return;
+                // 播完定格在最后一帧，恢复轮播计时
                 loading = false;
+                if (playVideoWithSound) {
+                    playVideoWithSound = false;
+                    afterSound(post, true);
+                } else {
+                    refreshCarouselTimer();
+                }
+            });
+            videoView.setOnErrorListener((mp, what, extra) -> {
+                if (!isCurrentVideo(generation, post)) return true;
+                loading = false;
+                videoPrepared = false;
+                playVideoWithSound = false;
+                videoPlayer = null;
+                videoActive = false;
                 videoView.setVisibility(View.GONE);
                 emptyView.setVisibility(View.VISIBLE);
                 emptyView.setText("这段视频打不开");
+                afterSound(post, false);
                 return true;
             });
+            videoView.setVideoURI(Uri.fromFile(display.file(store.root())));
         } else {
             emptyView.setVisibility(View.GONE);
             videoView.setVisibility(View.GONE);
             videoActive = false;
-            showPhotoWithDissolve(display.file(store.root()));
+            showPhotoWithFade(display.file(store.root()));
             loading = false;
         }
 
@@ -332,16 +354,12 @@ public class FrameActivity extends Activity {
         refreshCarouselTimer();
     }
 
-    /** 保留上一张作为底层，让新照片在 400ms 内自然溶解进来。 */
-    private void showPhotoWithDissolve(File file) {
-        Drawable previous = photoView.getDrawable();
+    /** 单图淡入；不合成不同尺寸的 drawable，避免 FIT_CENTER 按合成边界拉伸。 */
+    private void showPhotoWithFade(File file) {
+        photoView.animate().cancel();
+        photoView.setAlpha(ValueAnimator.areAnimatorsEnabled() ? 0f : 1f);
         photoView.setImageURI(Uri.fromFile(file));
-        Drawable next = photoView.getDrawable();
-        if (previous == null || next == null || !ValueAnimator.areAnimatorsEnabled()) return;
-        TransitionDrawable dissolve = new TransitionDrawable(new Drawable[]{previous, next});
-        dissolve.setCrossFadeEnabled(true);
-        photoView.setImageDrawable(dissolve);
-        dissolve.startTransition(400);
+        if (ValueAnimator.areAnimatorsEnabled()) photoView.animate().alpha(1f).setDuration(400).start();
     }
 
     private String friendlyDate(long createdAt) {
@@ -361,7 +379,6 @@ public class FrameActivity extends Activity {
     private void navigate(int dir) {
         if (posts.isEmpty()) return;
         userActivity();
-        stopPlayback();
         FrameStore.Post current = index >= 0 ? posts.get(index) : null;
         int photoCount = 0;
         if (current != null) {
@@ -390,7 +407,7 @@ public class FrameActivity extends Activity {
     // ---------------- 声音 ----------------
 
     private void playSound() {
-        if (posts.isEmpty() || index < 0) return;
+        if (posts.isEmpty() || index < 0 || !playBtn.isEnabled()) return;
         final FrameStore.Post post = posts.get(index);
         userActivity();
         playBtn.setEnabled(false);
@@ -417,13 +434,17 @@ public class FrameActivity extends Activity {
         }
         // 无录音无留言：重放视频原声（视频 post 专用）
         if (videoActive) {
-            videoView.setOnPreparedListener(mp -> {
-                mp.setVolume(1f, 1f);
-                mp.start();
-            });
-            videoView.seekTo(0);
-            videoView.start();
-            main.post(() -> afterSound(post, true));
+            playVideoWithSound = true;
+            if (videoPrepared && videoPlayer != null) {
+                try {
+                    videoPlayer.setVolume(1f, 1f);
+                    videoView.seekTo(0);
+                    videoView.start();
+                } catch (Exception ignored) {
+                    playVideoWithSound = false;
+                    afterSound(post, false);
+                }
+            }
             return;
         }
         main.post(() -> afterSound(post, false));
@@ -437,7 +458,15 @@ public class FrameActivity extends Activity {
 
     private void stopPlayback() {
         voice.stop();
-        if (videoView.isPlaying()) {
+        videoGeneration++;
+        videoPrepared = false;
+        playVideoWithSound = false;
+        videoPlayer = null;
+        loading = false;
+        videoView.setOnPreparedListener(null);
+        videoView.setOnCompletionListener(null);
+        videoView.setOnErrorListener(null);
+        if (videoActive) {
             try {
                 videoView.stopPlayback();
             } catch (Exception ignored) {
@@ -446,11 +475,15 @@ public class FrameActivity extends Activity {
         playBtn.setEnabled(true);
     }
 
+    private boolean isCurrentVideo(int generation, FrameStore.Post post) {
+        return generation == videoGeneration && videoActive && post.id.equals(shownPostId);
+    }
+
     // ---------------- 轮播（20 分钟） ----------------
 
     private final Runnable carouselTick = new Runnable() {
         @Override public void run() {
-            if (posts.size() < 2 || voice.isPlaying() || loading) {
+            if (posts.size() < 2 || voice.isPlaying() || playVideoWithSound || loading) {
                 refreshCarouselTimer();
                 return;
             }
@@ -473,9 +506,9 @@ public class FrameActivity extends Activity {
 
     private void refreshCarouselTimer() {
         main.removeCallbacks(carouselTick);
-        if (posts.size() < 2 || voice.isPlaying() || loading) {
+        if (posts.size() < 2 || voice.isPlaying() || playVideoWithSound || loading) {
             // 播放/加载期间不换图：稍后再试计时
-            if (voice.isPlaying() || loading) {
+            if (voice.isPlaying() || playVideoWithSound || loading) {
                 main.postDelayed(this::refreshCarouselTimer, 5000);
             }
             return;
